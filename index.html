@@ -121,7 +121,6 @@ button{font-family:inherit}
 .bar .track{flex:1 1 auto;height:10px;border-radius:999px;background:rgba(255,255,255,.65);overflow:hidden}
 .bar .fillbar{height:100%;width:0;border-radius:999px;background:linear-gradient(90deg,#4ADE80,#15803D)}
 .bar .pct{min-width:52px;text-align:right;font-size:16px;font-weight:700;color:#14532D;font-variant-numeric:tabular-nums}
-.hint{display:none;font-size:clamp(14px,1.3vw,18px);letter-spacing:.08em;color:#14532D;font-weight:500;opacity:.85;animation:hintPulse 2s ease-in-out infinite}
 @keyframes hintPulse{0%,100%{opacity:.5}50%{opacity:1}}
 
 /* ---------- fullscreen button ---------- */
@@ -203,7 +202,6 @@ button{font-family:inherit}
 <div class="track"><div class="fillbar" id="launchFill"></div></div>
 <div class="pct"><span id="launchPct">0</span>%</div>
 </div>
-<div class="hint" id="again">Tap or press Space to start over</div>
 </div>
 </section>
 
@@ -233,7 +231,6 @@ button{font-family:inherit}
     approachFace: 0.15, // someone counts as "approaching" once their face is this big (share of the camera's short side); raise it so they must step closer
     approachMs: 450,    // ...and stays that way for this long
     walkAwayMs: 6000,   // go back to waiting if nobody is in the circle for this long
-    launchHoldMs: 15000,// after the launch page is fully loaded, wait this long, then get ready for the next person
     clearMs: 1500       // after a launch, the camera must see nobody for this long before it will start again
   };
   // walk-up mode is the default. Add ?tap to the address to go back to tap-the-circle.
@@ -245,7 +242,7 @@ button{font-family:inherit}
   var timers = {};
   var stage = 'idle', demo = false, stream = null;
   var progress = 0;
-  var watchSince = 0, needClear = false, clearSince = 0, faceOK = false, okSince = 0, lostSince = 0, lastSeen = 0, hereSince = 0, manual = false, detecting = false, modelPromise = null, detectOpts = null;
+  var canRestart = false, watchSince = 0, needClear = false, clearSince = 0, faceOK = false, okSince = 0, lostSince = 0, lastSeen = 0, hereSince = 0, manual = false, detecting = false, modelPromise = null, detectOpts = null;
 
   /* ---------- helpers ---------- */
   function rnd(n) { var x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }
@@ -686,7 +683,7 @@ button{font-family:inherit}
   }
 
   function startReveal() {
-    $('again').style.display = 'none';
+    canRestart = false;
     $('launchNote').textContent = 'Preparing your experience…';
     $('launchFill').style.width = '0%'; $('launchPct').textContent = '0';
     var p = 0;
@@ -699,8 +696,7 @@ button{font-family:inherit}
       if (p >= 100) {
         clearT('launch');
         $('launchNote').textContent = 'Welcome aboard.';
-        $('again').style.display = 'block';
-        if (AUTO) timers.autoReturn = setTimeout(function () { if (stage === 'reveal') reset(); }, CFG.launchHoldMs);
+        canRestart = true;                 // stays on this page until Space is pressed
       }
     }, 50);
   }
@@ -740,11 +736,9 @@ button{font-family:inherit}
   $('retry').addEventListener('click', start);
   $('demoBtn').addEventListener('click', startDemo);
   function restartIfDone(e) {
-    if (stage !== 'reveal' || $('again').style.display !== 'block') return;
-    if (e && e.target && e.target.closest && e.target.closest('#fs')) return;
+    if (stage !== 'reveal' || !canRestart) return;
     reset();
   }
-  document.addEventListener('click', restartIfDone);
   document.addEventListener('keydown', function (e) {
     if (e.code === 'Space' || e.key === ' ') { if (stage === 'reveal') e.preventDefault(); restartIfDone(); }
   });
