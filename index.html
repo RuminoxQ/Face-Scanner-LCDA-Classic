@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="build" content="2026-11-20 classic-voice-v1 yaw1">
+<meta name="build" content="2026-11-20 classic-voice-v1 yaw3">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -232,6 +232,7 @@ button{font-family:inherit}
     approachFace: 0.15, // someone counts as "approaching" once their face is this big (share of the camera's short side); raise it so they must step closer
     approachMs: 450,    // ...and stays that way for this long
     walkAwayMs: 6000,   // go back to waiting if nobody is in the circle for this long
+    greetAgainMs: 12000,// the welcome line is said once per person; it is said again only after nobody has been seen for this long
     clearMs: 1500       // after a launch, the camera must see nobody for this long before it will start again
   };
   // walk-up mode is the default. Add ?tap to the address to go back to tap-the-circle.
@@ -245,7 +246,7 @@ button{font-family:inherit}
   var timers = {};
   var stage = 'idle', demo = false, stream = null;
   var progress = 0;
-  var detMs = 0, lmOK = false, canRestart = false, watchSince = 0, needClear = false, clearSince = 0, faceOK = false, okSince = 0, lostSince = 0, lastSeen = 0, hereSince = 0, manual = false, detecting = false, modelPromise = null, detectOpts = null;
+  var focusBox = null, greeted = false, faceSeenAt = 0, detMs = 0, lmOK = false, canRestart = false, watchSince = 0, needClear = false, clearSince = 0, faceOK = false, okSince = 0, lostSince = 0, lastSeen = 0, hereSince = 0, manual = false, detecting = false, modelPromise = null, detectOpts = null;
 
   /* ---------- helpers ---------- */
   function rnd(n) { var x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }
@@ -542,10 +543,20 @@ button{font-family:inherit}
       all.forEach(function (r) { r.box = r.detection ? r.detection.box : r.box; });
       var faces = all.filter(function (r) { return inFrame(r.box); })
         .sort(function (a, b) { return b.box.width * b.box.height - a.box.width * a.box.height; });
-      // only one person at a time: the nearest (largest) face counts, smaller faces behind are ignored,
-      // but two similar-sized faces are ambiguous, so wait until just one person is in front
-      var one = faces.length > 0 && (faces.length === 1 || faces[1].box.width * faces[1].box.height < 0.45 * faces[0].box.width * faces[0].box.height);
-      onFace(one && facingCamera(faces[0]), Date.now());
+      // several people can stand in the scanner: only the one at the front (the largest face) is followed, everyone behind is ignored,
+      // so it does not matter if they move or turn their heads. Once someone is being followed, stay with them unless someone clearly bigger steps in front.
+      var lead = faces[0];
+      if (lead && focusBox && faces.length > 1) {
+        var la = lead.box.width * lead.box.height, bd = 1e9, best = null;
+        faces.forEach(function (f) {
+          if (f.box.width * f.box.height < 0.7 * la) return;
+          var d = Math.hypot(f.box.x + f.box.width / 2 - (focusBox.x + focusBox.width / 2), f.box.y + f.box.height / 2 - (focusBox.y + focusBox.height / 2));
+          if (d < bd) { bd = d; best = f; }
+        });
+        if (best && bd < focusBox.width * 0.8) lead = best;
+      }
+      focusBox = lead ? lead.box : null;
+      onFace(!!lead && facingCamera(lead), Date.now());
     } catch (e) {
       onFace(false, Date.now());
     } finally {
@@ -571,7 +582,7 @@ button{font-family:inherit}
 
   function onFace(ok, now) {
     faceOK = ok;
-    if (ok) { lastSeen = now; lostSince = 0; if (!okSince) okSince = now; }
+    if (ok) { faceSeenAt = now; lastSeen = now; lostSince = 0; if (!okSince) okSince = now; }
     else { okSince = 0; if (!lostSince) lostSince = now; }
     var here = present(now);
     if (here) { if (!hereSince) hereSince = now; } else hereSince = 0;
@@ -629,6 +640,11 @@ button{font-family:inherit}
     return { play: play, stop: stop, stopFx: stopFx, pauseFx: pauseFx, resumeFx: resumeFx, greetDone: function () { return !greeting; }, toggle: function () { muted = !muted; if (muted) stop(); } };
   })();
 
+  // the welcome line is said once; if the person turns away and the scan restarts, only "Initiating Face Scan" is repeated
+  function greet(now) {
+    if (!greeted || now - faceSeenAt > CFG.greetAgainMs) { greeted = true; Voice.play('approach'); }
+  }
+
   /* ---------- walk-up mode: camera stays on and starts the scan when someone approaches ---------- */
   async function detectWatch() {
     if (detecting || !detectOpts || !video.videoWidth || stage !== 'idle') return;
@@ -644,7 +660,7 @@ button{font-family:inherit}
       }
       if (big >= CFG.approachFace) {
         if (!watchSince) watchSince = now;
-        if (now - watchSince >= CFG.approachMs) { watchSince = 0; clearT('watch'); Voice.play('approach'); beginPosition(); }
+        if (now - watchSince >= CFG.approachMs) { watchSince = 0; clearT('watch'); greet(now); faceSeenAt = now; beginPosition(); }
       } else watchSince = 0;
     } catch (e) { watchSince = 0; }
     finally { detecting = false; }
@@ -686,7 +702,7 @@ button{font-family:inherit}
     try { await s; } catch (e) { deny('Camera access was blocked or no camera was found. Allow camera access in your browser settings, then try again.'); return; }
     try { await m; } catch (e) { deny('Face detection could not load. Check the connection, reload the page and try again.'); return; }
     app.setAttribute('data-cam', '1'); app.setAttribute('data-auto', 'ok');
-    Voice.play('approach');
+    greet(Date.now());
     beginPosition();
   }
 
@@ -699,7 +715,7 @@ button{font-family:inherit}
   function beginPosition() {
     clearT('scan'); clearT('detect'); clearT('demoPos'); clearT('watch');
     progress = 0; $('scanPct').textContent = '0';
-    yawHist = []; okSince = 0; lostSince = Date.now(); faceOK = false; lastSeen = 0; hereSince = 0; manual = false;
+    focusBox = null; yawHist = []; okSince = 0; lostSince = Date.now(); faceOK = false; lastSeen = 0; hereSince = 0; manual = false;
     scanner.classList.remove('has', 'paused'); Voice.stopFx();
     setStage('position');
     if (demo) {
@@ -758,7 +774,7 @@ button{font-family:inherit}
   }
 
   function reset() {
-    clearAll(); Ribbons.start('ambient'); Birds.stop(); Voice.stop();
+    clearAll(); Ribbons.start('ambient'); Birds.stop(); Voice.stop(); greeted = false;
     progress = 0; $('scanPct').textContent = '0'; demo = false; app.setAttribute('data-demo', '0');
     setStage('idle');
     if (AUTO && !demo) ensureStream().then(function () { app.setAttribute('data-cam', '1'); enterWatch(false); }, function () { autoBoot(); });
