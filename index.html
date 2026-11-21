@@ -223,6 +223,10 @@ button{font-family:inherit}
   'use strict';
 
   /* ---- settings you can tune ---- */
+  /* Sound timing in ms. scan / scanning count from the moment the scan starts; confirm / complete / ident count from the moment the scan is granted.
+     Use sound-timeline.html to set these visually, or add e.g. ?snd=complete:650,ident:1500 to the address to try values. */
+  var SND = { scan: 0, scanning: 0, confirm: 0, complete: 650, ident: 1500 };
+  (function () { var m = location.search.match(/[?&]snd=([^&]+)/); if (m) m[1].split(',').forEach(function (kv) { var a = kv.split(':'); if (a[0] in SND && !isNaN(+a[1])) SND[a[0]] = Math.max(0, +a[1]); }); })();
   var CFG = {
     holdMs: 300,        // a face must be present this long before the scan starts
     scanMs: 4000,       // scan duration (only advances while a face is present)
@@ -626,7 +630,7 @@ button{font-family:inherit}
      Add ?mute to the address for silence, ?vol=0.6 for a quieter voice. Press M to mute/unmute. Missing files are skipped silently. */
   var Voice = (function () {
     var muted = /[?&]mute\b/.test(location.search), vm = location.search.match(/[?&]vol=([0-9.]+)/), vol = vm ? Math.min(1, +vm[1]) : 1;
-    var clips = {}, greeting = false, gt = 0, dt = 0;
+    var clips = {}, greeting = false, gt = 0, dts = {};
     ['approach', 'scan', 'complete', 'scanning', 'confirm', 'ident'].forEach(function (n) { var a = new Audio('audio/' + n + '.mp3?v=1'); a.preload = 'auto'; a.volume = n === 'scanning' ? vol * 0.7 : n === 'ident' ? vol * 0.6 : vol; clips[n] = a; });
     var fxv = vol * 0.7, ft = 0;                                   // 'scanning' is a sound effect under the voice; it fades out instead of cutting off
     var fxPaused = false;
@@ -637,11 +641,13 @@ button{font-family:inherit}
       var a = clips.scanning; clearInterval(ft); if (!a || a.paused) return;
       ft = setInterval(function () { a.volume = Math.max(0, a.volume - fxv / 8); if (a.volume <= 0.001) { clearInterval(ft); try { a.pause(); a.currentTime = 0; } catch (e) {} a.volume = fxv; } }, 40);
     }
-    function stop() { for (var k in clips) { if (k === 'scanning' || k === 'confirm') continue; try { clips[k].pause(); clips[k].currentTime = 0; } catch (e) {} } stopFx(); greeting = false; clearTimeout(gt); clearTimeout(dt); }
+    function stop() { for (var k in clips) { if (k === 'scanning' || k === 'confirm') continue; try { clips[k].pause(); clips[k].currentTime = 0; } catch (e) {} } stopFx(); greeting = false; clearTimeout(gt); for (var q in dts) clearTimeout(dts[q]); }
     function play(name, delay) {
       if (muted || !clips[name]) return;
-      if (delay) { clearTimeout(dt); dt = setTimeout(function () { play(name); }, delay); return; }
-      if (name === 'approach' || name === 'complete') stop();
+      clearTimeout(dts[name]);
+      if (delay) { dts[name] = setTimeout(function () { play(name); }, delay); return; }
+      if (name === 'approach') stop();
+      if (name === 'complete') { ['approach', 'scan'].forEach(function (k) { try { clips[k].pause(); clips[k].currentTime = 0; } catch (e) {} }); greeting = false; clearTimeout(gt); }
       var a = clips[name], done = function () { if (name === 'approach') { greeting = false; clearTimeout(gt); } };
       if (name === 'approach') { greeting = true; gt = setTimeout(done, 12000); }
       a.onended = a.onerror = done;
@@ -758,7 +764,7 @@ button{font-family:inherit}
     clearT('demoPos');
     progress = 0; $('scanPct').textContent = '0';
     setStage('scanning');
-    Voice.play('scan'); Voice.play('scanning');
+    Voice.play('scan', SND.scan); Voice.play('scanning', SND.scanning);
     var step = 100 / (CFG.scanMs / 60);
     timers.scan = setInterval(function () {
       Voice[(!demo && Date.now() - lastSeen > Math.max(450, 2.5 * detMs + CFG.detectEveryMs)) ? 'pauseFx' : 'resumeFx']();      // the scan sound stops as soon as the face turns away or leaves
@@ -772,13 +778,12 @@ button{font-family:inherit}
   function granted() {
     clearT('scan'); clearT('detect');
     setStage('granted');
-    Voice.stopFx(); Voice.play('confirm'); Voice.play('complete', 650);      // chime, then the voice
+    Voice.stopFx(); Voice.play('confirm', SND.confirm); Voice.play('complete', SND.complete); Voice.play('ident', SND.ident);      // chime, voice, logo sting
     timers.next = setTimeout(startEnergy, 1500);
   }
 
   function startEnergy() {
     setStage('energy');
-    Voice.play('ident');                 // logo sting as the ribbons sweep in (plays a little under the voice line)
     Ribbons.start('energy');
     timers.next = setTimeout(startReveal, 3600);
   }
