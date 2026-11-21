@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="build" content="2026-11-20 classic-walkup-v1">
+<meta name="build" content="2026-11-20 classic-voice-v1">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -555,7 +555,7 @@ button{font-family:inherit}
     scanner.classList.toggle('has', here);
     scanner.classList.toggle('paused', stage === 'scanning' && !here);
 
-    if (stage === 'position' && here && now - hereSince >= CFG.holdMs) beginScan();
+    if (stage === 'position' && here && now - hereSince >= CFG.holdMs && Voice.greetDone()) beginScan();
     else if (stage === 'scanning' && !here && lostSince && now - lostSince >= CFG.resetMs) beginPosition();
     else if (AUTO && stage === 'position' && !here && lostSince && now - lostSince >= CFG.walkAwayMs) { clearT('detect'); scanner.classList.remove('has', 'paused'); setStage('idle'); enterWatch(false); }
   }
@@ -577,6 +577,24 @@ button{font-family:inherit}
     stream = null; video.srcObject = null;
   }
 
+  /* ---------- voice lines (audio/approach.mp3, audio/scan.mp3, audio/complete.mp3) ----------
+     Add ?mute to the address for silence, ?vol=0.6 for a quieter voice. Press M to mute/unmute. Missing files are skipped silently. */
+  var Voice = (function () {
+    var muted = /[?&]mute\b/.test(location.search), vm = location.search.match(/[?&]vol=([0-9.]+)/), vol = vm ? Math.min(1, +vm[1]) : 1;
+    var clips = {}, greeting = false, gt = 0;
+    ['approach', 'scan', 'complete'].forEach(function (n) { var a = new Audio('audio/' + n + '.mp3?v=1'); a.preload = 'auto'; a.volume = vol; clips[n] = a; });
+    function stop() { for (var k in clips) { try { clips[k].pause(); clips[k].currentTime = 0; } catch (e) {} } greeting = false; clearTimeout(gt); }
+    function play(name) {
+      if (muted || !clips[name]) return;
+      if (name === 'approach' || name === 'complete') stop();
+      var a = clips[name], done = function () { if (name === 'approach') { greeting = false; clearTimeout(gt); } };
+      if (name === 'approach') { greeting = true; gt = setTimeout(done, 12000); }
+      a.onended = a.onerror = done;
+      try { a.currentTime = 0; var pr = a.play(); if (pr && pr.catch) pr.catch(done); } catch (e) { done(); }
+    }
+    return { play: play, stop: stop, greetDone: function () { return !greeting; }, toggle: function () { muted = !muted; if (muted) stop(); } };
+  })();
+
   /* ---------- walk-up mode: camera stays on and starts the scan when someone approaches ---------- */
   async function detectWatch() {
     if (detecting || !detectOpts || !video.videoWidth || stage !== 'idle') return;
@@ -592,7 +610,7 @@ button{font-family:inherit}
       }
       if (big >= CFG.approachFace) {
         if (!watchSince) watchSince = now;
-        if (now - watchSince >= CFG.approachMs) { watchSince = 0; clearT('watch'); beginPosition(); }
+        if (now - watchSince >= CFG.approachMs) { watchSince = 0; clearT('watch'); Voice.play('approach'); beginPosition(); }
       } else watchSince = 0;
     } catch (e) { watchSince = 0; }
     finally { detecting = false; }
@@ -634,6 +652,7 @@ button{font-family:inherit}
     try { await s; } catch (e) { deny('Camera access was blocked or no camera was found. Allow camera access in your browser settings, then try again.'); return; }
     try { await m; } catch (e) { deny('Face detection could not load. Check the connection, reload the page and try again.'); return; }
     app.setAttribute('data-cam', '1'); app.setAttribute('data-auto', 'ok');
+    Voice.play('approach');
     beginPosition();
   }
 
@@ -661,6 +680,7 @@ button{font-family:inherit}
     clearT('demoPos');
     progress = 0; $('scanPct').textContent = '0';
     setStage('scanning');
+    Voice.play('scan');
     var step = 100 / (CFG.scanMs / 60);
     timers.scan = setInterval(function () {
       if (!(demo || present(Date.now()))) return;                       // pause while the face is out of frame
@@ -673,6 +693,7 @@ button{font-family:inherit}
   function granted() {
     clearT('scan'); clearT('detect');
     setStage('granted');
+    Voice.play('complete');
     timers.next = setTimeout(startEnergy, 1500);
   }
 
@@ -702,7 +723,7 @@ button{font-family:inherit}
   }
 
   function reset() {
-    clearAll(); Ribbons.start('ambient'); Birds.stop();
+    clearAll(); Ribbons.start('ambient'); Birds.stop(); Voice.stop();
     progress = 0; $('scanPct').textContent = '0'; demo = false; app.setAttribute('data-demo', '0');
     setStage('idle');
     if (AUTO && !demo) { if (camLive()) enterWatch(true); else autoBoot(); }
@@ -741,6 +762,7 @@ button{font-family:inherit}
   }
   document.addEventListener('keydown', function (e) {
     if (e.code === 'Space' || e.key === ' ') { if (stage === 'reveal') e.preventDefault(); restartIfDone(); }
+    if (e.key === 'm' || e.key === 'M') Voice.toggle();
   });
 
   // start loading the detector right away so the first scan is quick
