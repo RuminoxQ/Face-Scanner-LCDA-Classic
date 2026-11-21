@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="build" content="2026-11-20 classic-voice-v1 ident2">
+<meta name="build" content="2026-11-20 classic-voice-v1 ident3">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -612,12 +612,12 @@ button{font-family:inherit}
     stream = null; video.srcObject = null;
   }
 
-  /* ---------- voice lines (audio/approach.mp3, audio/scan.mp3, audio/complete.mp3, audio/scanning.mp3 = scan sound effect, audio/confirm.mp3 = chime when the scan completes, audio/ident.mp3 = logo sting on the launch page) ----------
+  /* ---------- voice lines (audio/approach.mp3, audio/scan.mp3, audio/complete.mp3, audio/scanning.mp3 = scan sound effect, audio/confirm.mp3 = chime when the scan completes, audio/ident.mp3 = logo sting when the ribbons sweep in) ----------
      Add ?mute to the address for silence, ?vol=0.6 for a quieter voice. Press M to mute/unmute. Missing files are skipped silently. */
   var Voice = (function () {
     var muted = /[?&]mute\b/.test(location.search), vm = location.search.match(/[?&]vol=([0-9.]+)/), vol = vm ? Math.min(1, +vm[1]) : 1;
     var clips = {}, greeting = false, gt = 0, dt = 0;
-    ['approach', 'scan', 'complete', 'scanning', 'confirm', 'ident'].forEach(function (n) { var a = new Audio('audio/' + n + '.mp3?v=1'); a.preload = 'auto'; a.volume = n === 'scanning' ? vol * 0.7 : vol; clips[n] = a; });
+    ['approach', 'scan', 'complete', 'scanning', 'confirm', 'ident'].forEach(function (n) { var a = new Audio('audio/' + n + '.mp3?v=1'); a.preload = 'auto'; a.volume = n === 'scanning' ? vol * 0.7 : n === 'ident' ? vol * 0.6 : vol; clips[n] = a; });
     var fxv = vol * 0.7, ft = 0;                                   // 'scanning' is a sound effect under the voice; it fades out instead of cutting off
     var fxPaused = false;
     function pauseFx() { var a = clips.scanning; if (a && !a.paused && !fxPaused) { fxPaused = true; clearInterval(ft); try { a.pause(); } catch (e) {} } }
@@ -768,6 +768,7 @@ button{font-family:inherit}
 
   function startEnergy() {
     setStage('energy');
+    Voice.play('ident');                 // logo sting as the ribbons sweep in (plays a little under the voice line)
     Ribbons.start('energy');
     timers.next = setTimeout(startReveal, 3600);
   }
@@ -778,7 +779,6 @@ button{font-family:inherit}
     $('launchFill').style.width = '0%'; $('launchPct').textContent = '0';
     var p = 0;
     setStage('reveal');
-    Voice.play('ident');                 // logo sting as the launch page opens
     Ribbons.start('reveal'); Birds.start();
     timers.launch = setInterval(function () {
       p = Math.min(100, p + 0.9);
