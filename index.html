@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="build" content="2026-11-20 classic-voice-v1 fx2">
+<meta name="build" content="2026-11-20 classic-voice-v1 yaw1">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -226,6 +226,7 @@ button{font-family:inherit}
     detectEveryMs: 100, // how often to look for a face
     minFace: 0.12,      // face size limits, as a share of the circle (very forgiving)
     maxFace: 1.4,
+    maxYaw: 0.2,        // how far the head may turn sideways and still be scanned (0 = dead straight; roughly 0.2 = 25 degrees). Lower = stricter. Tune on site with ?debug and ?yaw=0.15
     // --- walk-up (kiosk) mode ---
     watchEveryMs: 250,  // how often to look for someone approaching while waiting
     approachFace: 0.15, // someone counts as "approaching" once their face is this big (share of the camera's short side); raise it so they must step closer
@@ -235,6 +236,8 @@ button{font-family:inherit}
   };
   // walk-up mode is the default. Add ?tap to the address to go back to tap-the-circle.
   var AUTO = !/[?&]tap\b/.test(location.search);
+  var DEBUG = /[?&]debug\b/.test(location.search), ym = location.search.match(/[?&]yaw=([0-9.]+)/);   // ?debug shows the live head-turn value; ?yaw=0.12 changes the limit
+  if (ym) CFG.maxYaw = +ym[1];
 
 
   var $ = function (id) { return document.getElementById(id); };
@@ -242,7 +245,7 @@ button{font-family:inherit}
   var timers = {};
   var stage = 'idle', demo = false, stream = null;
   var progress = 0;
-  var canRestart = false, watchSince = 0, needClear = false, clearSince = 0, faceOK = false, okSince = 0, lostSince = 0, lastSeen = 0, hereSince = 0, manual = false, detecting = false, modelPromise = null, detectOpts = null;
+  var detMs = 0, lmOK = false, canRestart = false, watchSince = 0, needClear = false, clearSince = 0, faceOK = false, okSince = 0, lostSince = 0, lastSeen = 0, hereSince = 0, manual = false, detecting = false, modelPromise = null, detectOpts = null;
 
   /* ---------- helpers ---------- */
   function rnd(n) { var x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }
@@ -509,6 +512,7 @@ button{font-family:inherit}
       try { await faceapi.tf.setBackend('webgl'); } catch (e) {}
       await faceapi.tf.ready();
       await faceapi.nets.tinyFaceDetector.loadFromUri('vendor/model');
+      try { await faceapi.nets.faceLandmark68TinyNet.loadFromUri('vendor/model'); lmOK = true; } catch (e) { lmOK = false; }
       detectOpts = new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.35 });
     })();
     modelPromise.catch(function () { modelPromise = null; });
@@ -532,18 +536,37 @@ button{font-family:inherit}
     if (stage !== 'position' && stage !== 'countdown' && stage !== 'scanning') return;
     detecting = true;
     try {
-      var all = await faceapi.detectAllFaces(video, detectOpts);
+      var t0 = performance.now(), req = faceapi.detectAllFaces(video, detectOpts);
+      var all = lmOK ? await req.withFaceLandmarks(true) : await req;
+      detMs = detMs ? detMs * 0.7 + (performance.now() - t0) * 0.3 : performance.now() - t0;
+      all.forEach(function (r) { r.box = r.detection ? r.detection.box : r.box; });
       var faces = all.filter(function (r) { return inFrame(r.box); })
         .sort(function (a, b) { return b.box.width * b.box.height - a.box.width * a.box.height; });
       // only one person at a time: the nearest (largest) face counts, smaller faces behind are ignored,
       // but two similar-sized faces are ambiguous, so wait until just one person is in front
       var one = faces.length > 0 && (faces.length === 1 || faces[1].box.width * faces[1].box.height < 0.45 * faces[0].box.width * faces[0].box.height);
-      onFace(one, Date.now());
+      onFace(one && facingCamera(faces[0]), Date.now());
     } catch (e) {
       onFace(false, Date.now());
     } finally {
       detecting = false;
     }
+  }
+
+  // is the head turned towards the camera? Uses the nose tip against the middle of the jaw (the jaw width stays steady when the head turns)
+  var yawHist = [];
+  function facingCamera(r) {
+    if (!lmOK || !r || !r.landmarks) return true;
+    var p = r.landmarks.positions, w = p[16].x - p[0].x;
+    if (!(w > 0)) return false;
+    var jaw = (p[30].x - (p[0].x + p[16].x) / 2) / w;                          // nose against the middle of the jaw
+    var ew = p[45].x - p[36].x, eye = ew > 0 ? (p[30].x - p[36].x) / ew - 0.5 : jaw;   // nose against the middle of the eyes
+    var yaw = (jaw + 2 * eye) / 2;
+    yawHist.push(yaw); if (yawHist.length > 5) yawHist.shift();
+    yaw = yawHist.slice().sort(function (a, b) { return a - b; })[yawHist.length >> 1];       // middle of the last few readings, so one noisy frame does not decide
+    window.__yaw = yaw; (window.__yaws = window.__yaws || []).push(+yaw.toFixed(3));
+    if (DEBUG) { var d = $('dbg') || document.body.appendChild(Object.assign(document.createElement('div'), { id: 'dbg', style: 'position:fixed;left:8px;bottom:8px;z-index:99;font:14px monospace;color:#064e3b;background:#fffc;padding:4px 8px;border-radius:6px' })); d.textContent = 'turn ' + yaw.toFixed(2) + (Math.abs(yaw) <= CFG.maxYaw ? '  facing' : '  turned away') + '  (limit ' + CFG.maxYaw + ')'; }
+    return Math.abs(yaw) <= CFG.maxYaw;
   }
 
   function onFace(ok, now) {
@@ -584,7 +607,11 @@ button{font-family:inherit}
     var clips = {}, greeting = false, gt = 0, dt = 0;
     ['approach', 'scan', 'complete', 'scanning', 'confirm'].forEach(function (n) { var a = new Audio('audio/' + n + '.mp3?v=1'); a.preload = 'auto'; a.volume = n === 'scanning' ? vol * 0.7 : vol; clips[n] = a; });
     var fxv = vol * 0.7, ft = 0;                                   // 'scanning' is a sound effect under the voice; it fades out instead of cutting off
+    var fxPaused = false;
+    function pauseFx() { var a = clips.scanning; if (a && !a.paused && !fxPaused) { fxPaused = true; clearInterval(ft); try { a.pause(); } catch (e) {} } }
+    function resumeFx() { var a = clips.scanning; if (a && fxPaused) { fxPaused = false; a.volume = fxv; if (!a.ended) { try { var pr = a.play(); if (pr && pr.catch) pr.catch(function () {}); } catch (e) {} } } }
     function stopFx() {
+      fxPaused = false;
       var a = clips.scanning; clearInterval(ft); if (!a || a.paused) return;
       ft = setInterval(function () { a.volume = Math.max(0, a.volume - fxv / 8); if (a.volume <= 0.001) { clearInterval(ft); try { a.pause(); a.currentTime = 0; } catch (e) {} a.volume = fxv; } }, 40);
     }
@@ -596,10 +623,10 @@ button{font-family:inherit}
       var a = clips[name], done = function () { if (name === 'approach') { greeting = false; clearTimeout(gt); } };
       if (name === 'approach') { greeting = true; gt = setTimeout(done, 12000); }
       a.onended = a.onerror = done;
-      if (name === 'scanning') { clearInterval(ft); a.volume = fxv; }
+      if (name === 'scanning') { clearInterval(ft); fxPaused = false; a.volume = fxv; }
       try { a.currentTime = 0; var pr = a.play(); if (pr && pr.catch) pr.catch(done); } catch (e) { done(); }
     }
-    return { play: play, stop: stop, stopFx: stopFx, greetDone: function () { return !greeting; }, toggle: function () { muted = !muted; if (muted) stop(); } };
+    return { play: play, stop: stop, stopFx: stopFx, pauseFx: pauseFx, resumeFx: resumeFx, greetDone: function () { return !greeting; }, toggle: function () { muted = !muted; if (muted) stop(); } };
   })();
 
   /* ---------- walk-up mode: camera stays on and starts the scan when someone approaches ---------- */
@@ -672,7 +699,7 @@ button{font-family:inherit}
   function beginPosition() {
     clearT('scan'); clearT('detect'); clearT('demoPos'); clearT('watch');
     progress = 0; $('scanPct').textContent = '0';
-    okSince = 0; lostSince = Date.now(); faceOK = false; lastSeen = 0; hereSince = 0; manual = false;
+    yawHist = []; okSince = 0; lostSince = Date.now(); faceOK = false; lastSeen = 0; hereSince = 0; manual = false;
     scanner.classList.remove('has', 'paused'); Voice.stopFx();
     setStage('position');
     if (demo) {
@@ -690,6 +717,7 @@ button{font-family:inherit}
     Voice.play('scan'); Voice.play('scanning');
     var step = 100 / (CFG.scanMs / 60);
     timers.scan = setInterval(function () {
+      Voice[(!demo && Date.now() - lastSeen > Math.max(450, 2.5 * detMs + CFG.detectEveryMs)) ? 'pauseFx' : 'resumeFx']();      // the scan sound stops as soon as the face turns away or leaves
       if (!(demo || present(Date.now()))) return;                       // pause while the face is out of frame
       progress = Math.min(100, progress + step);
       $('scanPct').textContent = String(Math.round(progress));
@@ -733,7 +761,7 @@ button{font-family:inherit}
     clearAll(); Ribbons.start('ambient'); Birds.stop(); Voice.stop();
     progress = 0; $('scanPct').textContent = '0'; demo = false; app.setAttribute('data-demo', '0');
     setStage('idle');
-    if (AUTO && !demo) { if (camLive()) enterWatch(true); else autoBoot(); }
+    if (AUTO && !demo) ensureStream().then(function () { app.setAttribute('data-cam', '1'); enterWatch(false); }, function () { autoBoot(); });
   }
 
   /* ---------- dot-matrix portrait ---------- */
