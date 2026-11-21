@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="build" content="2026-11-20 classic-voice-v1 ident1">
+<meta name="build" content="2026-11-20 classic-voice-v1 ident2">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -132,6 +132,7 @@ button{font-family:inherit}
 #fs.on .ico-out{display:block}
 
 @media (prefers-reduced-motion: reduce){.scanline,.firefly,.shield .r1,.shield .r2{animation:none}}
+#soundHint{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:99;padding:9px 18px;border-radius:999px;background:rgba(255,255,255,.88);color:#14532D;font:600 15px/1.2 system-ui,sans-serif;letter-spacing:.03em;box-shadow:0 6px 20px rgba(20,83,45,.18);pointer-events:none}
 </style>
 </head>
 <body>
@@ -635,8 +636,25 @@ button{font-family:inherit}
       if (name === 'approach') { greeting = true; gt = setTimeout(done, 12000); }
       a.onended = a.onerror = done;
       if (name === 'scanning') { clearInterval(ft); fxPaused = false; a.volume = fxv; }
-      try { a.currentTime = 0; var pr = a.play(); if (pr && pr.catch) pr.catch(done); } catch (e) { done(); }
+      try { a.currentTime = 0; var pr = a.play(); if (pr && pr.catch) pr.catch(function (err) { if (err && err.name === 'NotAllowedError') showHint(true); done(); }); } catch (e) { done(); }
     }
+    // Browsers refuse to play sound until someone has touched the page once. Until then a small hint asks for a tap / key press.
+    var unlocked = false, hint = null, AC = window.AudioContext || window.webkitAudioContext, ctx = null;
+    function showHint(on) {
+      if (muted || (on && unlocked)) return;
+      if (!hint) { hint = document.createElement('div'); hint.id = 'soundHint'; hint.textContent = '\uD83D\uDD08  Tap the screen or press any key to turn on sound'; document.body.appendChild(hint); }
+      hint.style.display = on ? 'block' : 'none';
+    }
+    function unlock() {
+      if (unlocked) return; unlocked = true; showHint(false);
+      try { if (ctx && ctx.resume) ctx.resume(); } catch (e) {}
+      for (var k in clips) (function (a) {                       // touch every clip once, silently, so later plays are allowed
+        var v = a.volume; a.volume = 0;
+        try { var pr = a.play(); if (pr && pr.then) pr.then(function () { if (!a.onended || a.currentTime < 0.05) { a.pause(); a.currentTime = 0; } a.volume = v; }, function () { a.volume = v; }); else a.volume = v; } catch (e) { a.volume = v; }
+      })(clips[k]);
+    }
+    ['pointerdown', 'touchend', 'keydown', 'click'].forEach(function (ev) { window.addEventListener(ev, unlock, { capture: true, passive: true }); });
+    try { if (AC) { ctx = new AC(); if (ctx.state === 'running') unlocked = true; else setTimeout(function () { if (!unlocked) showHint(true); }, 600); } } catch (e) {}
     return { play: play, stop: stop, stopFx: stopFx, pauseFx: pauseFx, resumeFx: resumeFx, greetDone: function () { return !greeting; }, toggle: function () { muted = !muted; if (muted) stop(); } };
   })();
 
