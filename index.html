@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="build" content="2026-11-20 classic-voice-v1">
+<meta name="build" content="2026-11-20 classic-voice-v1 fx2">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -220,7 +220,7 @@ button{font-family:inherit}
   /* ---- settings you can tune ---- */
   var CFG = {
     holdMs: 300,        // a face must be present this long before the scan starts
-    scanMs: 2500,       // scan duration (only advances while a face is present)
+    scanMs: 4000,       // scan duration (only advances while a face is present)
     presentMs: 900,     // a face counts as present for this long after it was last seen
     resetMs: 3000,      // go back to the start if no face is seen for this long mid-scan
     detectEveryMs: 100, // how often to look for a face
@@ -577,22 +577,29 @@ button{font-family:inherit}
     stream = null; video.srcObject = null;
   }
 
-  /* ---------- voice lines (audio/approach.mp3, audio/scan.mp3, audio/complete.mp3) ----------
+  /* ---------- voice lines (audio/approach.mp3, audio/scan.mp3, audio/complete.mp3, audio/scanning.mp3 = scan sound effect, audio/confirm.mp3 = chime when the scan completes) ----------
      Add ?mute to the address for silence, ?vol=0.6 for a quieter voice. Press M to mute/unmute. Missing files are skipped silently. */
   var Voice = (function () {
     var muted = /[?&]mute\b/.test(location.search), vm = location.search.match(/[?&]vol=([0-9.]+)/), vol = vm ? Math.min(1, +vm[1]) : 1;
-    var clips = {}, greeting = false, gt = 0;
-    ['approach', 'scan', 'complete'].forEach(function (n) { var a = new Audio('audio/' + n + '.mp3?v=1'); a.preload = 'auto'; a.volume = vol; clips[n] = a; });
-    function stop() { for (var k in clips) { try { clips[k].pause(); clips[k].currentTime = 0; } catch (e) {} } greeting = false; clearTimeout(gt); }
-    function play(name) {
+    var clips = {}, greeting = false, gt = 0, dt = 0;
+    ['approach', 'scan', 'complete', 'scanning', 'confirm'].forEach(function (n) { var a = new Audio('audio/' + n + '.mp3?v=1'); a.preload = 'auto'; a.volume = n === 'scanning' ? vol * 0.7 : vol; clips[n] = a; });
+    var fxv = vol * 0.7, ft = 0;                                   // 'scanning' is a sound effect under the voice; it fades out instead of cutting off
+    function stopFx() {
+      var a = clips.scanning; clearInterval(ft); if (!a || a.paused) return;
+      ft = setInterval(function () { a.volume = Math.max(0, a.volume - fxv / 8); if (a.volume <= 0.001) { clearInterval(ft); try { a.pause(); a.currentTime = 0; } catch (e) {} a.volume = fxv; } }, 40);
+    }
+    function stop() { for (var k in clips) { if (k === 'scanning' || k === 'confirm') continue; try { clips[k].pause(); clips[k].currentTime = 0; } catch (e) {} } stopFx(); greeting = false; clearTimeout(gt); clearTimeout(dt); }
+    function play(name, delay) {
       if (muted || !clips[name]) return;
+      if (delay) { clearTimeout(dt); dt = setTimeout(function () { play(name); }, delay); return; }
       if (name === 'approach' || name === 'complete') stop();
       var a = clips[name], done = function () { if (name === 'approach') { greeting = false; clearTimeout(gt); } };
       if (name === 'approach') { greeting = true; gt = setTimeout(done, 12000); }
       a.onended = a.onerror = done;
+      if (name === 'scanning') { clearInterval(ft); a.volume = fxv; }
       try { a.currentTime = 0; var pr = a.play(); if (pr && pr.catch) pr.catch(done); } catch (e) { done(); }
     }
-    return { play: play, stop: stop, greetDone: function () { return !greeting; }, toggle: function () { muted = !muted; if (muted) stop(); } };
+    return { play: play, stop: stop, stopFx: stopFx, greetDone: function () { return !greeting; }, toggle: function () { muted = !muted; if (muted) stop(); } };
   })();
 
   /* ---------- walk-up mode: camera stays on and starts the scan when someone approaches ---------- */
@@ -666,7 +673,7 @@ button{font-family:inherit}
     clearT('scan'); clearT('detect'); clearT('demoPos'); clearT('watch');
     progress = 0; $('scanPct').textContent = '0';
     okSince = 0; lostSince = Date.now(); faceOK = false; lastSeen = 0; hereSince = 0; manual = false;
-    scanner.classList.remove('has', 'paused');
+    scanner.classList.remove('has', 'paused'); Voice.stopFx();
     setStage('position');
     if (demo) {
       timers.demoPos = setTimeout(function () { scanner.classList.add('has'); faceOK = true; timers.demoPos = setTimeout(beginScan, 700); }, 1800);
@@ -680,7 +687,7 @@ button{font-family:inherit}
     clearT('demoPos');
     progress = 0; $('scanPct').textContent = '0';
     setStage('scanning');
-    Voice.play('scan');
+    Voice.play('scan'); Voice.play('scanning');
     var step = 100 / (CFG.scanMs / 60);
     timers.scan = setInterval(function () {
       if (!(demo || present(Date.now()))) return;                       // pause while the face is out of frame
@@ -693,7 +700,7 @@ button{font-family:inherit}
   function granted() {
     clearT('scan'); clearT('detect');
     setStage('granted');
-    Voice.play('complete');
+    Voice.stopFx(); Voice.play('confirm'); Voice.play('complete', 650);      // chime, then the voice
     timers.next = setTimeout(startEnergy, 1500);
   }
 
