@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="build" content="2026-11-20 classic-voice-v1 ident3">
+<meta name="build" content="2026-11-20 classic-voice-v1 ident3 tv1">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -43,7 +43,7 @@ button{font-family:inherit}
 .glow{position:absolute;border-radius:50%}
 .g1{left:-12%;top:-20%;width:60%;height:90%;background:radial-gradient(closest-side,rgba(34,197,94,.28),transparent)}
 .g2{right:-14%;bottom:-30%;width:70%;height:100%;background:radial-gradient(closest-side,rgba(74,222,128,.2),transparent)}
-.skyline{position:absolute;left:50%;bottom:1.5vh;transform:translateX(-50%);width:min(92vw,130vh);opacity:.95;pointer-events:none;-webkit-mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent);mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent)}
+.skyline{position:absolute;left:50%;bottom:1.5vh;transform:translateX(-50%);width:92vw;width:min(92vw,130vh);opacity:.95;pointer-events:none;-webkit-mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent);mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent)}
 
 .scape{position:absolute;left:0;right:0;bottom:7vh;width:100%;height:34vh;pointer-events:none}
 .fauna{position:absolute;left:0;right:0;bottom:3.2vh;height:0;pointer-events:none;display:none}
@@ -63,7 +63,7 @@ button{font-family:inherit}
 
 /* ---------- scanner scene ---------- */
 #scene{position:absolute;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;padding:0 4vw 13vh}
-.scanner{--s:min(64vh,92vw,720px);position:relative;width:var(--s);height:var(--s)}
+.scanner{--s:60vh;position:relative;width:var(--s);height:var(--s)}
 .disc{position:absolute;top:0;left:0;width:100%;height:100%;border-radius:50%;overflow:hidden;background:radial-gradient(closest-side,#F6FDF8,#D3F0DD);box-shadow:0 0 0 8px rgba(255,255,255,.75),0 22px 60px rgba(20,83,45,.28);transform:translateZ(0);-webkit-mask-image:-webkit-radial-gradient(white,black)}
 #video{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1);opacity:0;transition:opacity .25s}
 [data-stage=position] #video,[data-stage=scanning] #video,[data-stage=granted] #video{opacity:1}
@@ -82,8 +82,8 @@ button{font-family:inherit}
 .check svg{width:58%;height:58%}
 .denied{position:absolute;top:0;left:0;width:100%;height:100%;border-radius:50%;background:rgba(240,253,244,.96);display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:12%;text-align:center}
 [data-stage=denied] .denied{display:flex}
-.denied h2{margin:0;font-family:'Sora',sans-serif;font-weight:700;font-size:clamp(18px,2.4vw,30px)}
-.denied p{margin:0;font-size:clamp(13px,1.3vw,17px);line-height:1.45;color:#166534;max-width:360px}
+.denied h2{margin:0;font-family:'Sora',sans-serif;font-weight:700;font-size:24px;font-size:clamp(18px,2.4vw,30px)}
+.denied p{margin:0;font-size:15px;font-size:clamp(13px,1.3vw,17px);line-height:1.45;color:#166534;max-width:360px}
 .row{display:flex;flex-wrap:wrap;gap:10px;justify-content:center}
 .btn{cursor:pointer;min-height:48px;padding:0 22px;border-radius:999px;font-size:16px;font-weight:700;border:2px solid #14532D;background:transparent;color:#14532D;transition:filter .15s,transform .15s}
 .btn.solid{background:#14532D;color:#fff;border-color:#14532D}
@@ -112,19 +112,19 @@ button{font-family:inherit}
 #ribbons{position:absolute;top:0;left:0;width:100%;height:100%;display:block}
 #reveal{color:#14532D}
 .center{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2.6vh;padding:24px 24px 14vh;text-align:center}
-.logo{height:min(40vh,62vw);width:auto;filter:drop-shadow(0 0 22px rgba(255,255,255,.9)) drop-shadow(0 6px 18px rgba(20,83,45,.18));animation:logoIn 1.4s .3s cubic-bezier(.2,.8,.2,1) both}
+.logo{height:40vh;height:min(40vh,62vw);width:auto;filter:drop-shadow(0 0 22px rgba(255,255,255,.9)) drop-shadow(0 6px 18px rgba(20,83,45,.18));animation:logoIn 1.4s .3s cubic-bezier(.2,.8,.2,1) both}
 @keyframes logoIn{from{opacity:0;transform:scale(.82);filter:blur(14px) drop-shadow(0 0 22px #fff)}to{opacity:1;transform:scale(1)}}
 .rise{animation:dcRise .6s ease-out both}
-.title{margin:0;font-family:'Sora',sans-serif;font-weight:700;font-size:clamp(20px,3vw,40px);letter-spacing:.14em;text-transform:uppercase;color:#14532D}
-.note{font-size:clamp(15px,1.5vw,22px);color:#166534}
-.bar{display:flex;align-items:center;gap:14px;width:min(86vw,480px)}
+.title{margin:0;font-family:'Sora',sans-serif;font-weight:700;font-size:28px;font-size:clamp(20px,3vw,40px);letter-spacing:.14em;text-transform:uppercase;color:#14532D}
+.note{font-size:18px;font-size:clamp(15px,1.5vw,22px);color:#166534}
+.bar{display:flex;align-items:center;gap:14px;width:86vw;max-width:480px}
 .bar .track{flex:1 1 auto;height:10px;border-radius:999px;background:rgba(255,255,255,.65);overflow:hidden}
 .bar .fillbar{height:100%;width:0;border-radius:999px;background:linear-gradient(90deg,#4ADE80,#15803D)}
 .bar .pct{min-width:52px;text-align:right;font-size:16px;font-weight:700;color:#14532D;font-variant-numeric:tabular-nums}
 @keyframes hintPulse{0%,100%{opacity:.5}50%{opacity:1}}
 
 /* ---------- fullscreen button ---------- */
-#fs{position:fixed;top:max(14px,env(safe-area-inset-top));right:max(14px,env(safe-area-inset-right));z-index:50;width:44px;height:44px;border-radius:12px;border:1px solid rgba(20,83,45,.35);background:rgba(255,255,255,.65);color:#14532D;display:none;align-items:center;justify-content:center;cursor:pointer;padding:0;opacity:.75;transition:opacity .15s}
+#fs{position:fixed;top:14px;right:14px;top:max(14px,env(safe-area-inset-top));right:max(14px,env(safe-area-inset-right));z-index:50;width:44px;height:44px;border-radius:12px;border:1px solid rgba(20,83,45,.35);background:rgba(255,255,255,.65);color:#14532D;display:none;align-items:center;justify-content:center;cursor:pointer;padding:0;opacity:.75;transition:opacity .15s}
 #fs:hover,#fs:active{opacity:1}
 #fs svg{width:22px;height:22px}
 #fs .ico-out{display:none}
@@ -133,6 +133,9 @@ button{font-family:inherit}
 
 @media (prefers-reduced-motion: reduce){.scanline,.firefly,.shield .r1,.shield .r2{animation:none}}
 #soundHint{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:99;padding:9px 18px;border-radius:999px;background:rgba(255,255,255,.88);color:#14532D;font:600 15px/1.2 system-ui,sans-serif;letter-spacing:.03em;box-shadow:0 6px 20px rgba(20,83,45,.18);pointer-events:none}
+@supports (width:min(1px,2px)){.scanner{--s:min(64vh,92vw,720px)}}
+@supports not (inset:0){.disc::after{top:0;right:0;bottom:0;left:0}}
+.nogap .row>*{margin:5px}.nogap .center>*+*{margin-top:2.6vh}.nogap .bar>*+*{margin-left:14px}.nogap .denied>*+*{margin-top:14px}
 </style>
 </head>
 <body>
@@ -195,7 +198,7 @@ button{font-family:inherit}
 <section id="reveal" class="layer">
 <div class="center">
 <img class="logo" src="logo.png?v=3" alt="LCDA">
-<div class="rise" style="display:flex;flex-direction:column;align-items:center;gap:8px;animation-delay:1.2s">
+<div class="rise" style="display:flex;flex-direction:column;align-items:center;gap:8px;animation-delay:1.2s" data-g8>
 <h1 class="title">Launching Mobile LCDA</h1>
 <div class="note" id="launchNote">Preparing your experience…</div>
 </div>
@@ -213,7 +216,8 @@ button{font-family:inherit}
 
 </div>
 
-<script src="vendor/face-api.js"></script>
+<script>(function(){var d=document.createElement("div");d.style.cssText="display:flex;flex-direction:column;gap:1px;position:absolute;visibility:hidden";d.appendChild(document.createElement("i"));d.appendChild(document.createElement("i"));document.documentElement.appendChild(d);var ok=d.scrollHeight===1;document.documentElement.removeChild(d);if(!ok)document.documentElement.className+=" nogap";if(!Promise.prototype.finally)Promise.prototype.finally=function(f){return this.then(function(v){return Promise.resolve(f()).then(function(){return v})},function(e){return Promise.resolve(f()).then(function(){throw e})})};})();</script>
+<script src="vendor/face-api.compat.js"></script>
 <script>
 (function () {
   'use strict';
@@ -247,7 +251,7 @@ button{font-family:inherit}
   var timers = {};
   var stage = 'idle', demo = false, stream = null;
   var progress = 0;
-  var focusBox = null, greeted = false, faceSeenAt = 0, detMs = 0, lmOK = false, canRestart = false, watchSince = 0, needClear = false, clearSince = 0, faceOK = false, okSince = 0, lostSince = 0, lastSeen = 0, hereSince = 0, manual = false, detecting = false, modelPromise = null, detectOpts = null;
+  var lite = /[?&]lite\b/.test(location.search), detN = 0, focusBox = null, greeted = false, faceSeenAt = 0, detMs = 0, lmOK = false, canRestart = false, watchSince = 0, needClear = false, clearSince = 0, faceOK = false, okSince = 0, lostSince = 0, lastSeen = 0, hereSince = 0, manual = false, detecting = false, modelPromise = null, detectOpts = null;
 
   /* ---------- helpers ---------- */
   function rnd(n) { var x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }
@@ -313,7 +317,7 @@ button{font-family:inherit}
     var L = [-.4, -.6, -.7], ll = Math.sqrt(.16 + .36 + .49); L = [L[0] / ll, L[1] / ll, L[2] / ll];
 
     function resize() {
-      var d = Math.min(window.devicePixelRatio || 1, 2);
+      var d = Math.min(window.devicePixelRatio || 1, 1.5);
       W = cv.clientWidth; H = cv.clientHeight;
       cv.width = Math.round(W * d); cv.height = Math.round(H * d);
       cx.setTransform(d, 0, 0, d, 0, 0);
@@ -541,6 +545,7 @@ button{font-family:inherit}
       var t0 = performance.now(), req = faceapi.detectAllFaces(video, detectOpts);
       var all = lmOK ? await req.withFaceLandmarks(true) : await req;
       detMs = detMs ? detMs * 0.7 + (performance.now() - t0) * 0.3 : performance.now() - t0;
+      if (!lite && ++detN > 12 && detMs > 380) { lite = true; try { detectOpts = new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.35 }); } catch (e) {} if (detMs > 700) lmOK = false; }   // slow TV chip: smaller detector, then drop head-turn check
       all.forEach(function (r) { r.box = r.detection ? r.detection.box : r.box; });
       var faces = all.filter(function (r) { return inFrame(r.box); })
         .sort(function (a, b) { return b.box.width * b.box.height - a.box.width * a.box.height; });
@@ -601,7 +606,12 @@ button{font-family:inherit}
       if (video.srcObject !== stream) video.srcObject = stream;
     } else {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('no camera api');
-      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 960 } }, audio: false });
+      try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 960 } }, audio: false }); }
+      catch (e1) {
+        if (e1 && (e1.name === 'NotAllowedError' || e1.name === 'SecurityError')) throw e1;
+        try { stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 640 }, height: { ideal: 480 } }, audio: false }); }   // TV browsers / plain USB webcams
+        catch (e2) { stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false }); }
+      }
       video.srcObject = stream;
     }
     video.muted = true; video.setAttribute('playsinline', '');
@@ -831,7 +841,7 @@ button{font-family:inherit}
     reset();
   }
   document.addEventListener('keydown', function (e) {
-    if (e.code === 'Space' || e.key === ' ') { if (stage === 'reveal') e.preventDefault(); restartIfDone(); }
+    if (e.code === 'Space' || e.key === ' ' || e.keyCode === 32 || ((e.key === 'Enter' || e.keyCode === 13) && stage === 'reveal')) { if (stage === 'reveal') e.preventDefault(); restartIfDone(); }
     if (e.key === 'm' || e.key === 'M') Voice.toggle();
   });
 
