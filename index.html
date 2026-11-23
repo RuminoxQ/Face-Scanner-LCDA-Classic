@@ -240,13 +240,16 @@ button{font-family:inherit}
     watchEveryMs: 250,  // how often to look for someone approaching while waiting
     approachFace: 0.15, // someone counts as "approaching" once their face is this big (share of the camera's short side); raise it so they must step closer
     approachMs: 450,    // ...and stays that way for this long
+    stillMs: 800,       // the biggest (front) face must also hold still this long before the welcome and scan start
+    stillMove: 0.2,     // "still" = it moves less than this many face-widths and its size changes less than this share (raise it to be more forgiving; ?still=0.5)
     walkAwayMs: 6000,   // go back to waiting if nobody is in the circle for this long
     greetAgainMs: 12000,// the welcome line is said once per person; it is said again only after nobody has been seen for this long
     clearMs: 1500       // after a launch, the camera must see nobody for this long before it will start again
   };
   // walk-up mode is the default. Add ?tap to the address to go back to tap-the-circle.
   var AUTO = !/[?&]tap\b/.test(location.search);
-  var DEBUG = /[?&]debug\b/.test(location.search), ym = location.search.match(/[?&]yaw=([0-9.]+)/);   // ?debug shows the live head-turn value; ?yaw=0.12 changes the limit
+  var DEBUG = /[?&]debug\b/.test(location.search), ym = location.search.match(/[?&]yaw=([0-9.]+)/);
+  (function () { var m = location.search.match(/[?&]still=([0-9.]+)/); if (m) CFG.stillMove = +m[1]; })();   // ?debug shows the live head-turn value; ?yaw=0.12 changes the limit
   if (ym) CFG.maxYaw = +ym[1];
 
 
@@ -255,7 +258,7 @@ button{font-family:inherit}
   var timers = {};
   var stage = 'idle', demo = false, stream = null;
   var progress = 0;
-  var lite = /[?&]lite\b/.test(location.search), detN = 0, focusBox = null, greeted = false, faceSeenAt = 0, detMs = 0, lmOK = false, canRestart = false, watchSince = 0, needClear = false, clearSince = 0, faceOK = false, okSince = 0, lostSince = 0, lastSeen = 0, hereSince = 0, manual = false, detecting = false, modelPromise = null, detectOpts = null;
+  var stillRef = null, lite = /[?&]lite\b/.test(location.search), detN = 0, focusBox = null, greeted = false, faceSeenAt = 0, detMs = 0, lmOK = false, canRestart = false, watchSince = 0, needClear = false, clearSince = 0, faceOK = false, okSince = 0, lostSince = 0, lastSeen = 0, hereSince = 0, manual = false, detecting = false, modelPromise = null, detectOpts = null;
 
   /* ---------- helpers ---------- */
   function rnd(n) { var x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }
@@ -522,7 +525,7 @@ button{font-family:inherit}
       try { await faceapi.tf.setBackend('webgl'); } catch (e) {}
       await faceapi.tf.ready();
       await faceapi.nets.tinyFaceDetector.loadFromUri('vendor/model');
-      try { await faceapi.nets.faceLandmark68TinyNet.loadFromUri('vendor/model'); lmOK = true; } catch (e) { lmOK = false; }
+      if (/[?&]turn\b/.test(location.search)) { try { await faceapi.nets.faceLandmark68TinyNet.loadFromUri('vendor/model'); lmOK = true; } catch (e) { lmOK = false; } }   // head-turn check is off (any face counts); add ?turn to the address to switch it back on
       detectOpts = new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.35 });
     })();
     modelPromise.catch(function () { modelPromise = null; });
@@ -550,7 +553,7 @@ button{font-family:inherit}
       var all = lmOK ? await req.withFaceLandmarks(true) : await req;
       detMs = detMs ? detMs * 0.7 + (performance.now() - t0) * 0.3 : performance.now() - t0;
       if (!lite && ++detN > 12 && detMs > 380) { lite = true; try { detectOpts = new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.35 }); } catch (e) {} if (detMs > 700) lmOK = false; }   // slow TV chip: smaller detector, then drop head-turn check
-      all.forEach(function (r) { r.box = r.detection ? r.detection.box : r.box; });
+      all = all.map(function (r) { return { box: r.detection ? r.detection.box : r.box, landmarks: r.landmarks, detection: r.detection || r }; });
       var faces = all.filter(function (r) { return inFrame(r.box); })
         .sort(function (a, b) { return b.box.width * b.box.height - a.box.width * a.box.height; });
       // several people can stand in the scanner: only the one at the front (the largest face) is followed, everyone behind is ignored,
@@ -631,6 +634,7 @@ button{font-family:inherit}
   var Voice = (function () {
     var muted = /[?&]mute\b/.test(location.search), vm = location.search.match(/[?&]vol=([0-9.]+)/), vol = vm ? Math.min(1, +vm[1]) : 1;
     var clips = {}, greeting = false, gt = 0, dts = {};
+    var VOICEOVER = /[?&]voice\b/.test(location.search);    // voice lines are off (sound effects only); add ?voice to the address to bring them back
     ['approach', 'scan', 'complete', 'scanning', 'confirm', 'ident'].forEach(function (n) { var a = new Audio('audio/' + n + '.mp3?v=1'); a.preload = 'auto'; a.volume = n === 'scanning' ? vol * 0.7 : n === 'ident' ? vol * 0.6 : vol; clips[n] = a; });
     var fxv = vol * 0.7, ft = 0;                                   // 'scanning' is a sound effect under the voice; it fades out instead of cutting off
     var fxPaused = false;
@@ -643,6 +647,7 @@ button{font-family:inherit}
     }
     function stop() { for (var k in clips) { if (k === 'scanning' || k === 'confirm') continue; try { clips[k].pause(); clips[k].currentTime = 0; } catch (e) {} } stopFx(); greeting = false; clearTimeout(gt); for (var q in dts) clearTimeout(dts[q]); }
     function play(name, delay) {
+      if (!VOICEOVER && (name === 'approach' || name === 'scan' || name === 'complete')) return;
       if (muted || !clips[name]) return;
       clearTimeout(dts[name]);
       if (delay) { dts[name] = setTimeout(function () { play(name); }, delay); return; }
@@ -685,16 +690,19 @@ button{font-family:inherit}
     detecting = true;
     try {
       var all = await faceapi.detectAllFaces(video, detectOpts), now = Date.now();
-      var side = Math.min(video.videoWidth, video.videoHeight), big = 0;
-      all.forEach(function (r) { big = Math.max(big, Math.max(r.box.width, r.box.height) / side); });
+      var side = Math.min(video.videoWidth, video.videoHeight), big = 0, bigBox = null;
+      all.forEach(function (r) { var sz = Math.max(r.box.width, r.box.height) / side; if (sz > big) { big = sz; bigBox = r.box; } });
       if (needClear) {                                   // just finished a launch: wait for that person to leave
         if (big < CFG.minFace) { if (!clearSince) clearSince = now; if (now - clearSince >= CFG.clearMs) needClear = false; }
         else clearSince = 0;
         watchSince = 0; return;
       }
-      if (big >= CFG.approachFace) {
-        if (!watchSince) watchSince = now;
-        if (now - watchSince >= CFG.approachMs) { watchSince = 0; clearT('watch'); greet(now); faceSeenAt = now; beginPosition(); }
+      if (big >= CFG.approachFace && bigBox) {
+        var cx = bigBox.x + bigBox.width / 2, cy = bigBox.y + bigBox.height / 2, w = bigBox.width;
+        if (!watchSince || !stillRef || Math.sqrt((cx - stillRef.cx) * (cx - stillRef.cx) + (cy - stillRef.cy) * (cy - stillRef.cy)) / stillRef.w > CFG.stillMove || Math.abs(w - stillRef.w) / stillRef.w > CFG.stillMove) {
+          watchSince = now; stillRef = { cx: cx, cy: cy, w: w };       // still moving (or a different face is now the biggest): start the wait again
+        }
+        if (now - watchSince >= Math.max(CFG.approachMs, CFG.stillMs)) { watchSince = 0; clearT('watch'); greet(now); faceSeenAt = now; beginPosition(); }
       } else watchSince = 0;
     } catch (e) { watchSince = 0; }
     finally { detecting = false; }
