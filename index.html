@@ -229,7 +229,8 @@ button{font-family:inherit}
   (function () { var m = location.search.match(/[?&]snd=([^&]+)/); if (m) m[1].split(',').forEach(function (kv) { var a = kv.split(':'); if (a[0] in SND && !isNaN(+a[1])) SND[a[0]] = Math.max(0, +a[1]); }); })();
   var CFG = {
     holdMs: 300,        // a face must be present this long before the scan starts
-    scanMs: 4000,       // scan duration (only advances while a face is present)
+    launchMs: 2800,     // how long the "Launching Mobile LCDA" percentage bar takes to fill (was about 5600)
+    scanMs: 2500,       // scan duration (only advances while a face is present)
     presentMs: 900,     // a face counts as present for this long after it was last seen
     resetMs: 3000,      // go back to the start if no face is seen for this long mid-scan
     detectEveryMs: 100, // how often to look for a face
@@ -240,7 +241,7 @@ button{font-family:inherit}
     watchEveryMs: 250,  // how often to look for someone approaching while waiting
     approachFace: 0.15, // someone counts as "approaching" once their face is this big (share of the camera's short side); raise it so they must step closer
     approachMs: 450,    // ...and stays that way for this long
-    stillMs: 800,       // the biggest (front) face must also hold still this long before the welcome and scan start
+    stillMs: 0,         // 0 = start as soon as a face is there. Set e.g. 800 to make the front face hold still that long before the scan starts
     stillMove: 0.2,     // "still" = it moves less than this many face-widths and its size changes less than this share (raise it to be more forgiving; ?still=0.5)
     walkAwayMs: 6000,   // go back to waiting if nobody is in the circle for this long
     greetAgainMs: 12000,// the welcome line is said once per person; it is said again only after nobody has been seen for this long
@@ -593,6 +594,8 @@ button{font-family:inherit}
     return Math.abs(yaw) <= CFG.maxYaw;
   }
 
+  // once a scan has started it runs to the end even if the face leaves the circle; add ?pause to the address to make it wait for the face again
+  var PAUSE_ON_LOSS = /[?&]pause\b/.test(location.search);
   function onFace(ok, now) {
     faceOK = ok;
     if (ok) { faceSeenAt = now; lastSeen = now; lostSince = 0; if (!okSince) okSince = now; }
@@ -600,10 +603,10 @@ button{font-family:inherit}
     var here = present(now);
     if (here) { if (!hereSince) hereSince = now; } else hereSince = 0;
     scanner.classList.toggle('has', here);
-    scanner.classList.toggle('paused', stage === 'scanning' && !here);
+    scanner.classList.toggle('paused', PAUSE_ON_LOSS && stage === 'scanning' && !here);
 
     if (stage === 'position' && here && now - hereSince >= CFG.holdMs && Voice.greetDone()) beginScan();
-    else if (stage === 'scanning' && !here && lostSince && now - lostSince >= CFG.resetMs) beginPosition();
+    else if (PAUSE_ON_LOSS && stage === 'scanning' && !here && lostSince && now - lostSince >= CFG.resetMs) beginPosition();
     else if (AUTO && stage === 'position' && !here && lostSince && now - lostSince >= CFG.walkAwayMs) { clearT('detect'); scanner.classList.remove('has', 'paused'); setStage('idle'); enterWatch(false); }
   }
 
@@ -699,7 +702,7 @@ button{font-family:inherit}
       }
       if (big >= CFG.approachFace && bigBox) {
         var cx = bigBox.x + bigBox.width / 2, cy = bigBox.y + bigBox.height / 2, w = bigBox.width;
-        if (!watchSince || !stillRef || Math.sqrt((cx - stillRef.cx) * (cx - stillRef.cx) + (cy - stillRef.cy) * (cy - stillRef.cy)) / stillRef.w > CFG.stillMove || Math.abs(w - stillRef.w) / stillRef.w > CFG.stillMove) {
+        if (!watchSince || (CFG.stillMs > 0 && (!stillRef || Math.sqrt((cx - stillRef.cx) * (cx - stillRef.cx) + (cy - stillRef.cy) * (cy - stillRef.cy)) / stillRef.w > CFG.stillMove || Math.abs(w - stillRef.w) / stillRef.w > CFG.stillMove))) {
           watchSince = now; stillRef = { cx: cx, cy: cy, w: w };       // still moving (or a different face is now the biggest): start the wait again
         }
         if (now - watchSince >= Math.max(CFG.approachMs, CFG.stillMs)) { watchSince = 0; clearT('watch'); greet(now); faceSeenAt = now; beginPosition(); }
@@ -775,8 +778,8 @@ button{font-family:inherit}
     Voice.play('scan', SND.scan); Voice.play('scanning', SND.scanning);
     var step = 100 / (CFG.scanMs / 60);
     timers.scan = setInterval(function () {
-      Voice[(!demo && Date.now() - lastSeen > Math.max(450, 2.5 * detMs + CFG.detectEveryMs)) ? 'pauseFx' : 'resumeFx']();      // the scan sound stops as soon as the face turns away or leaves
-      if (!(demo || present(Date.now()))) return;                       // pause while the face is out of frame
+      Voice[(PAUSE_ON_LOSS && !demo && Date.now() - lastSeen > Math.max(450, 2.5 * detMs + CFG.detectEveryMs)) ? 'pauseFx' : 'resumeFx']();      // the scan sound stops as soon as the face turns away or leaves
+      if (PAUSE_ON_LOSS && !(demo || present(Date.now()))) return;                       // pause while the face is out of frame
       progress = Math.min(100, progress + step);
       $('scanPct').textContent = String(Math.round(progress));
       if (progress >= 100) granted();
@@ -804,7 +807,7 @@ button{font-family:inherit}
     setStage('reveal');
     Ribbons.start('reveal'); Birds.start();
     timers.launch = setInterval(function () {
-      p = Math.min(100, p + 0.9);
+      p = Math.min(100, p + 100 / (CFG.launchMs / 50));
       $('launchFill').style.width = p + '%';
       $('launchPct').textContent = String(Math.round(p));
       if (p >= 100) {
